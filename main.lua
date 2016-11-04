@@ -38,7 +38,8 @@ function collide(o, world)
     return false
 end
 function update(world,input,dt)
-    newworld = {}
+    --[[
+    newworld = bump.newWorld()
     for k,v in pairs(world) do
         newworld[k] = v
     end
@@ -46,26 +47,28 @@ function update(world,input,dt)
     for k,v in pairs(world.player) do
         newworld.player[k] = v
     end
+    --]]
     if input == "left" then
-        newworld.player.x = world.player.x - world.player.speed*dt 
+        world.player.x = world.player.x - world.player.speed*dt 
     elseif input == "right" then
-        newworld.player.x = world.player.x + world.player.speed*dt 
+        world.player.x = world.player.x + world.player.speed*dt 
     elseif input == "jump" then
         if world.player.state == "ground" then
-            newworld.player.vy = world.player.jump
+            world.player.vy = world.player.jump
             --newworld.player.state = "air"
         end
     end
     if world.player.state == "air" then
-        newworld.player.y = world.player.y + newworld.player.vy*dt
-        newworld.player.vy = newworld.player.vy - world.gravity*dt
+        world.player.y = world.player.y + world.player.vy*dt
+        world.player.vy = world.player.vy - world.gravity*dt
     end
-    if collide(world.player,world) then
-        newworld.player.state = "ground"
+    world.player.x,world.player.y,cols,len = world:move(world.player,world.player.x,world.player.y) 
+    if len > 0 then
+        world.player.state = "ground"
     else
-        newworld.player.state = "air"
+        world.player.state = "air"
     end
-    return newworld
+    return world
 end
 --[[
 world
@@ -142,6 +145,11 @@ end
 function remember(x)
     return x
 end
+function snap(world)
+    local player = {}
+    player.x = world.player.x
+    return {player=player}
+end
 function getscore(world,newworld)
     local score = 0
     --[[
@@ -181,7 +189,7 @@ function genstate(time,world)
 end
 function getstate(ia,s)
     --player state,dx,dy
-    --print(s[1],s[2],s[3])
+    print(s[1],s[2],s[3],s[4],ia[s[1]][s[2]])
     if s[3] > r/2 then s[3] = r/2 end
     if s[3] < -r/2 then s[3] = -r/2 end
     if s[4] > r/2 then s[4] = r/2 end
@@ -202,26 +210,46 @@ function episode(memory,rate,security,seed,length)
     local score = 0
     --print("\tstart")
     while time < length and not condition(world) do
+        local photo = snap(world)
         local s = genstate(time,world)
         local input = runIA(IA,world,s)
         local dt = 1
         local newworld = update(world,input2string(input),dt)
         --print(input2string(input),world.player.x,newworld.player.x)
-        score = score + getscore(world,newworld) - 1
+        score = score + getscore(photo,world) - 1
+        --score = score + getscore(world,newworld) - 1
         --print("\tstep",time,input,score, world.player.x,world.player.y)
         time = time + dt
         local sl = genstate(time,world)
         IA = train(IA,s,sl,input,score,rate,security,dt)
-        world = newworld
+        --world = newworld
     end
     print(score)
     --print(time,IA[time][1],IA[time][2],IA[time][3],IA[time][4])
     return IA
 end
+local binser = require "binser"
+function save(ia,l,r,num)
+    local fileName = num.."_"..l.."_"..r..".ia"
+    local f = love.filesystem.newFile(fileName)
+    f:write(binser.serialize(ia))
+end
 function love.load()
-    l = 100
-    r = 50
-    trained = learning(1,0.5,100,l,r)
+    l = 400
+    r = 100
+    local num = 100
+    --print(jupiter.load("xxx"))
+
+    local name = num.."_"..l.."_"..r..".ia"
+    print(name)
+    if not love.filesystem.isFile(name) then
+        print("training")
+        trained = learning(1,0.5,num,l,r)
+        save(trained,l,r,num)
+    else
+        print("loading")
+        trained = binser.deserialize(love.filesystem.read(name))
+    end
     world = startworld(seed)
     time = 1
     H = 400
@@ -230,14 +258,15 @@ end
 function love.update(dt)
 
     if time < l and love.keyboard.isDown("space") then
+        local photo = snap(world)
         local s = genstate(time,world)
         local input = runIA(trained,world,s)
     --else
     --    local input = 4
-        score = score + getscore(world,newworld) - 1
-        local newworld = update(world,input2string(input),1)
+        score = score + getscore(photo,world) - 1
+        update(world,input2string(input),1)
         time = time + 1
-        world = newworld
+        --world = newworld
     end
 end
 function love.draw()
