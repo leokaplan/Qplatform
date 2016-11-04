@@ -99,15 +99,34 @@ function initIA(size0,size1,size2,size3)
 end
 --rate = 1
 function learning(rate, security,num,length,range)
+    length = length*4
     local IA = initIA(length+10,2,range+10,range+10)
-    seed = 0
-    for i=1,num do
-        print("episode "..i)
-        IA = episode(IA,rate,security,seed,length)
+    local seed = 0
+    local score = 0
+    local count = 0
+    local newscore,newIA
+    while score < 500 do
+    --for i=1,num do
+        --print("episode "..i)
+        newIA,newscore = episode(IA,rate,security,seed,length)
+        print(newscore,score,count)
+        if newscore == score then
+            count = count + 1
+            security = security*0.9
+            print("conv",15-count,security)
+            if count > 15 then
+                break
+            end
+        elseif newscore > score then 
+            score = newscore
+            IA = newIA
+            count = 0
+        end
     end
-    for k,v in pairs(IA) do
+    print(score,security)
+    --for k,v in pairs(IA) do
         --print(k, v["air"],v[2],v[3],v[4])
-    end
+    --end
     return IA
 end
     
@@ -115,7 +134,7 @@ function runIA(ia,world,s)
     return max(getstate(ia,s))
 end
 function train(ia,s,sl,a,score,rate,security,dt)
-    getstate(ia,s)[a] = getstate(ia,s)[a] + rate * (score + security*max(getstate(ia,sl)) - getstate(ia,s)[a] )
+    getstate(ia,s)[a] = getstate(ia,s)[a] + rate * (score + security*getstate(ia,sl)[max(getstate(ia,sl))] - getstate(ia,s)[a] )
     return ia
 end
 function condition(world)
@@ -124,8 +143,18 @@ function condition(world)
     end
     return false
 end
+function copy(obj, seen)
+  if type(obj) ~= 'table' then return obj end
+  if seen and seen[obj] then return seen[obj] end
+  local s = seen or {}
+  local res = setmetatable({}, getmetatable(obj))
+  s[obj] = res
+  for k, v in pairs(obj) do res[copy(k, s)] = copy(v, s) end
+  return res
+end
+
 function remember(x)
-    return x
+    return copy(x)
 end
 function snap(world)
     local a = world.player.x*1
@@ -144,17 +173,17 @@ function getscore(world,newworld)
         --score = score + (newworld.player.y - world.player.y)
     end
     --]]
-    if newworld.player.state == "air" and world.player.state == "air" then
+    if newworld.player.state == "air" then
         score = score + (newworld.player.x - world.player.x)*1
     end
     --if newworld.player.state == "ground" and world.player.state == "air" then
     --    score = score + 100
     --end
     if newworld.player.state == "ground" then
-        score = score + (newworld.player.x - world.player.x)*2
+        score = score + (newworld.player.x - world.player.x)*1
     end
         --score = score + (newworld.player.x - world.player.x)
-        score = score - 1
+    --score = score - 1
     return score
 end
 function dist(a,b)
@@ -217,9 +246,9 @@ function episode(memory,rate,security,seed,length)
         IA = train(IA,s,sl,input,score,rate,security,dt)
         --world = newworld
     end
-    print(score)
+    --print(score)
     --print(time,IA[time][1],IA[time][2],IA[time][3],IA[time][4])
-    return IA
+    return IA,score
 end
 local binser = require "binser"
 function save(ia,name)
@@ -250,7 +279,7 @@ function love.load()
 end
 function love.update(dt)
 
-    if time < l and love.keyboard.isDown("space") then
+    if time < l and love.keyboard.isDown("space") and not condition(world) then
         local photo = snap(world)
         local s = genstate(time,world)
         local input = runIA(trained,world,s)
