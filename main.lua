@@ -10,32 +10,21 @@ function startworld(seed)
     player.w = 10
     player.h = 10
     player.speed = 5
-    player.jump = 10
+    player.jump = 12
     player.state = "air"
     world.player = player 
     world:add(world.player,world.player.x,world.player.y,world.player.w,world.player.h)
     world.plats = {}
     table.insert(world.plats,{x=0,y=0,h=5,w=40})
     local num = 10
-    local sw = 15
+    local sw = 20
     for i=1,num do
-        table.insert(world.plats,{x=20+i*(40+sw),y=0,h=5,w=30})
+        table.insert(world.plats,{x=20+i*(40+sw),y=0,h=5,w=40})
     end
     for k,v in pairs(world.plats) do
         world:add(v,v.x,v.y,v.w,v.h)
     end
     return world
-end
-function collide(o, world)
-    for k,p in pairs(world.plats) do
-        if o.x < p.x+p.w and o.x > p.x and o.y > p.y and o.y < p.y+o.h then
-            return true
-        end
-        if p.x < o.x+o.w and p.x > o.x and p.y > o.y and p.y < o.y+p.h then
-            return true
-        end
-    end
-    return false
 end
 function update(world,input,dt)
     --[[
@@ -103,14 +92,7 @@ function initIA(size0,size1,size2,size3)
     for i=1,size0 do
         ia[i] = {}
         for k,v in pairs({"air","ground"}) do
-            ia[i][v] = {}
-            for j=-size2/2,size2/2 do
-                ia[i][v][j] = {}
-                for k=-size3/2,size3/2 do
-                --ia[i] = {100,100,100,100}
-                    ia[i][v][j][k] = {100,100,100,100}
-                end
-            end
+            ia[i][v] =  {math.random(0,10),math.random(0,10),math.random(0,10),math.random(0,10)}
         end
     end
     return ia
@@ -146,15 +128,14 @@ function remember(x)
     return x
 end
 function snap(world)
-    local player = {}
-    player.x = world.player.x
-    return {player=player}
+    local a = world.player.x*1
+    return {player={x=a,state=world.player.state}}
 end
 function getscore(world,newworld)
     local score = 0
     --[[
-    if newworld.player.state == "ground" and world.player.state == "air" then
-        score = score + 10
+    if newworld.player.y < 20 then
+        score = score - 10000
     end
     if newworld.player.state == "ground" and world.player.state == "ground" then
         score = score + 1
@@ -163,8 +144,18 @@ function getscore(world,newworld)
         --score = score + (newworld.player.y - world.player.y)
     end
     --]]
-    score = score - (newworld.player.x - world.player.x)
-    return 0
+    if newworld.player.state == "air" and world.player.state == "air" then
+        score = score + (newworld.player.x - world.player.x)*1
+    end
+    --if newworld.player.state == "ground" and world.player.state == "air" then
+    --    score = score + 100
+    --end
+    if newworld.player.state == "ground" then
+        score = score + (newworld.player.x - world.player.x)*2
+    end
+        --score = score + (newworld.player.x - world.player.x)
+        score = score - 1
+    return score
 end
 function dist(a,b)
     return math.sqrt((a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y))
@@ -185,16 +176,18 @@ function genstate(time,world)
     dx = math.floor(plata.x - world.player.x) 
     dy = math.floor(plata.y - world.player.y) 
     --print(dx,dy)
-    return {time,world.player.state,dx,dy} 
+    return {time,world.player.state} 
 end
 function getstate(ia,s)
     --player state,dx,dy
-    print(s[1],s[2],s[3],s[4],ia[s[1]][s[2]])
+    --[[
+    print(s[1],s[2],s[3],s[4],ia[s[1] ] [ s[2] ])
     if s[3] > r/2 then s[3] = r/2 end
     if s[3] < -r/2 then s[3] = -r/2 end
     if s[4] > r/2 then s[4] = r/2 end
     if s[4] < -r/2 then s[4] = -r/2 end
-    return ia[s[1]][s[2]][s[3]][s[4]] 
+    --]]
+    return ia[s[1]][s[2]] 
 end
 
 function input2string(i)
@@ -216,7 +209,7 @@ function episode(memory,rate,security,seed,length)
         local dt = 1
         local newworld = update(world,input2string(input),dt)
         --print(input2string(input),world.player.x,newworld.player.x)
-        score = score + getscore(photo,world) - 1
+        score = score + getscore(photo,world) 
         --score = score + getscore(world,newworld) - 1
         --print("\tstep",time,input,score, world.player.x,world.player.y)
         time = time + dt
@@ -229,23 +222,23 @@ function episode(memory,rate,security,seed,length)
     return IA
 end
 local binser = require "binser"
-function save(ia,l,r,num)
-    local fileName = num.."_"..l.."_"..r..".ia"
-    local f = love.filesystem.newFile(fileName)
+function save(ia,name)
+    local f = love.filesystem.newFile(name)
     f:write(binser.serialize(ia))
 end
 function love.load()
-    l = 400
+    override = true
+    l = 300
     r = 100
-    local num = 100
+    local num = 1000
     --print(jupiter.load("xxx"))
 
     local name = num.."_"..l.."_"..r..".ia"
     print(name)
-    if not love.filesystem.isFile(name) then
+    if override or not love.filesystem.isFile(name) then
         print("training")
-        trained = learning(1,0.5,num,l,r)
-        save(trained,l,r,num)
+        trained = learning(1,1,num,l,r)
+        save(trained,name)
     else
         print("loading")
         trained = binser.deserialize(love.filesystem.read(name))
@@ -263,8 +256,8 @@ function love.update(dt)
         local input = runIA(trained,world,s)
     --else
     --    local input = 4
-        score = score + getscore(photo,world) - 1
         update(world,input2string(input),1)
+        score = score + getscore(photo,world) 
         time = time + 1
         --world = newworld
     end
@@ -278,9 +271,9 @@ function love.draw()
     end
     love.graphics.rectangle("line",world.player.x,H-world.player.y-world.player.h,world.player.w,world.player.h)
     love.graphics.setColor(255,255,255)
-    love.graphics.print(score,10,10)
-    love.graphics.print(world.player.x,10,20)
-    love.graphics.print(world.player.y,10,30)
+    love.graphics.print("$ "..score,10,10)
+    love.graphics.print("X "..world.player.x,10,20)
+    love.graphics.print("Y "..world.player.y,10,30)
     for k,p in pairs(world.plats) do
         love.graphics.rectangle("line",p.x,H-p.y+p.h,p.w,p.h)
     end
